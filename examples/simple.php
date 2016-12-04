@@ -8,28 +8,40 @@ define('Production', __DIR__.'/../src/Schema/ProductionService.wsdl');
 use FilipSedivy\EET\Dispatcher;
 use FilipSedivy\EET\Receipt;
 use FilipSedivy\EET\Utils\UUID;
-use FilipSedivy\EET\Certificate;
+use FilipSedivy\EET\Message;
+use FilipSedivy\EET\Company;
+use FilipSedivy\EET\Environment;
 
-$certificate = new Certificate(__DIR__.'/EET_CA1_Playground-CZ00000019.p12', 'eet');
-$dispatcher = new Dispatcher(Playground, $certificate);
+$environment = new Environment(
+	__DIR__ . '/EET_CA1_Playground-CZ00000019.p12',
+	'eet',
+	Playground
+);
 
+$dispatcher = new Dispatcher($environment);
 $dispatcher->trace = true;
 
 $uuid = UUID::v4();
 
-$r = new Receipt;
-$r->uuid_zpravy = $uuid;
-$r->id_provoz = '11';
-$r->id_pokl = 'IP105';
-$r->dic_popl = 'CZ1212121218';
-$r->porad_cis = '1';
-$r->dat_trzby = new \DateTime();
-$r->celk_trzba = 500;
+$company = new Company;
+$company->setDicPopl('CZ1212121218');
+$company->setIdPokl('IP105');
+$company->setIdProvoz('11');
+
+$receipt = new Receipt;
+$receipt->setCompany($company);
+$receipt->setPoradCis(1);
+$receipt->setDatTrzby(new \DateTime());
+$receipt->setCelkTrzba(500.0);
+
+$message = new Message;
+$message->setUuidZpravy($uuid);
+$message->setReceipt($receipt);
 
 echo '<h2>---REQUEST---</h2>';
 echo "<pre>";
 try {
-    $fik = $dispatcher->send($r);
+    $fik = $dispatcher->send($message);
     echo sprintf('<b>Returned FIK code: %s</b><br />', $fik);
 } catch (\FilipSedivy\EET\Exceptions\ServerException $e) {
     var_dump($e); // See exception

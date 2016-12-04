@@ -10,13 +10,15 @@ use FilipSedivy\EET\Exceptions\ClientException;
  * @author Filip Šedivý <mail@filipsedivy.cz>
  * @version 1.0.1
 */
-class Certificate
+class Environment implements IEnvironment
 {
-    private $pkey;
+    private $privateKey;
 
-    private $cert;
+    private $certificate;
 
-    public function __construct($certificate, $password)
+	private $service;
+
+	public function __construct(string $certificate, string $password, string $service)
     {
         if(!file_exists($certificate)){
             throw new ClientException("Certifikat nebyl nalezen");
@@ -31,15 +33,24 @@ class Certificate
             throw new ClientException("Certifikat se nepodarilo vyexportovat.");
         }
 
-        $this->pkey = $certs['pkey'];
-        $this->cert = $certs['cert'];
+        $this->privateKey = $certs['pkey'];
+        $this->certificate = $certs['cert'];
+
+	    $this->service = $service;
     }
 
-    public function getPrivateKey(){
-        return $this->pkey;
+    public function getPrivateKey() : string
+    {
+        return $this->privateKey;
     }
 
-    public function getCert(){
-        return $this->cert;
+    public function getCertificate() : string
+    {
+        return $this->certificate;
     }
+
+	public function getService() : string
+	{
+		return $this->service;
+	}
 }

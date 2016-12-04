@@ -14,17 +14,10 @@ use RobRichards\XMLSecLibs\XMLSecurityKey;
  */
 class Dispatcher {
 
-    /**
-     * Certificate
-     * @var Certificate
-     */
-    private $cert;
-
-    /**
-     * WSDL path or URL
-     * @var string
-     */
-    private $service;
+	/**
+	 * @var IEnvironment
+	 */
+	private $environment;
 
     /**
      * @var boolean
@@ -37,25 +30,17 @@ class Dispatcher {
      */
     private $soapClient;
 
-    /**
-     *
-     * @param Certificate $cert
-     */
-    public function __construct($service,Certificate $cert) {
-        $this->service = $service;
-        $this->cert = $cert;
+
+    public function __construct(IEnvironment $environment)
+    {
         $this->checkRequirements();
+	    $this->environment = $environment;
     }
 
-    /**
-     *
-     * @param string $service
-     * @param Receipt $receipt
-     * @return boolean|string
-     */
-    public function check(Receipt $receipt) {
+    public function check(IMessage $message) : bool
+    {
         try {
-            return $this->send($receipt, TRUE);
+            return (bool) $this->send($message->getOvereni() ? $message : (clone $message));
         } catch (ServerException $e) {
             return FALSE;
         }
@@ -106,22 +91,22 @@ class Dispatcher {
         throw new ClientException('Trace is not enabled! Set trace property to TRUE.');
     }
 
-    /**
-     *
-     * @param \FilipSedivy\EET\Receipt $receipt
-     * @return array
-     */
-    public function getCheckCodes(Receipt $receipt) {
+
+    public function getCheckCodes(IMessage $message) : array
+    {
         $objKey = new XMLSecurityKey(XMLSecurityKey::RSA_SHA256, ['type' => 'private']);
-        $objKey->loadKey($this->cert->getPrivateKey());
+        $objKey->loadKey($this->environment->getPrivateKey());
+
+	    $receipt = $message->getReceipt();
+	    $company = $receipt->getCompany();
 
         $arr = [
-            $receipt->dic_popl,
-            $receipt->id_provoz,
-            $receipt->id_pokl,
-            $receipt->porad_cis,
-            $receipt->dat_trzby->format('c'),
-            Format::price($receipt->celk_trzba)
+            $company->getDicPopl(),
+            $company->getIdProvoz(),
+            $company->getIdPokl(),
+            $receipt->getPoradCis(),
+            $receipt->getDatTrzby()->format('c'),
+	        Format::price($receipt->getCelkTrzba()),
         ];
         $sign = $objKey->signData(join('|', $arr));
 
@@ -140,20 +125,16 @@ class Dispatcher {
         ];
     }
 
-    /**
-     *
-     * @param Receipt $receipt
-     * @param boolean $check
-     * @return boolean|string
-     */
-    public function send(Receipt $receipt, $check = FALSE) {
+
+    public function send(IMessage $message) : string
+    {
         $this->initSoapClient();
 
-        $response = $this->processData($receipt, $check);
+        $response = $this->processData($message);
 
         isset($response->Chyba) && $this->processError($response->Chyba);
 
-        return $check ? TRUE : $response->Potvrzeni->fik;
+        return $message->getOvereni() ? '1' : $response->Potvrzeni->fik;
     }
 
     /**
@@ -184,57 +165,56 @@ class Dispatcher {
      */
     private function initSoapClient() {
         if ($this->soapClient === NULL) {
-            $this->soapClient = new SoapClient($this->service, $this->cert, $this->trace);
+            $this->soapClient = new SoapClient($this->environment, $this->trace);
         }
     }
 
-    public function prepareData($receipt, $check = FALSE) {
+    public function prepareData(IMessage $message) : array
+    {
         $head = [
-            'uuid_zpravy' => $receipt->uuid_zpravy,
+            'uuid_zpravy' => $message->getUuidZpravy(),
             'dat_odesl' => time(),
-            'prvni_zaslani' => $receipt->prvni_zaslani,
-            'overeni' => $check
+            'prvni_zaslani' => $message->getPrvniZaslani(),
+            'overeni' => $message->getOvereni(),
         ];
 
+	    $receipt = $message->getReceipt();
+	    $company = $receipt->getCompany();
+
         $body = [
-            'dic_popl' => $receipt->dic_popl,
-            'dic_poverujiciho' => $receipt->dic_poverujiciho,
-            'id_provoz' => $receipt->id_provoz,
-            'id_pokl' => $receipt->id_pokl,
-            'porad_cis' => $receipt->porad_cis,
-            'dat_trzby' => $receipt->dat_trzby->format('c'),
-            'celk_trzba' => Format::price($receipt->celk_trzba),
-            'zakl_nepodl_dph' => Format::price($receipt->zakl_nepodl_dph),
-            'zakl_dan1' => Format::price($receipt->zakl_dan1),
-            'dan1' => Format::price($receipt->dan1),
-            'zakl_dan2' => Format::price($receipt->zakl_dan2),
-            'dan2' => Format::price($receipt->dan2),
-            'zakl_dan3' => Format::price($receipt->zakl_dan3),
-            'dan3' => Format::price($receipt->dan3),
-            'cest_sluz' => Format::price($receipt->cest_sluz),
-            'pouzit_zboz1' => Format::price($receipt->pouzit_zboz1),
-            'pouzit_zboz2' => Format::price($receipt->pouzit_zboz2),
-            'pouzit_zboz3' => Format::price($receipt->pouzit_zboz3),
-            'urceno_cerp_zuct' => Format::price($receipt->urceno_cerp_zuct),
-            'cerp_zuct' => Format::price($receipt->cerp_zuct),
-            'rezim' => $receipt->rezim
+            'dic_popl' => $company->getDicPopl(),
+            'dic_poverujiciho' => $company->getDicPoverujiciho(),
+            'id_provoz' => $company->getIdProvoz(),
+            'id_pokl' => $company->getIdPokl(),
+            'porad_cis' => $receipt->getPoradCis(),
+            'dat_trzby' => $receipt->getDatTrzby()->format('c'),
+            'celk_trzba' => Format::price($receipt->getCelkTrzba()),
+            'zakl_nepodl_dph' => Format::price($receipt->getZaklNepodlDph()),
+            'zakl_dan1' => Format::price($receipt->getZaklDan1()),
+            'dan1' => Format::price($receipt->getDan1()),
+            'zakl_dan2' => Format::price($receipt->getZaklDan2()),
+            'dan2' => Format::price($receipt->getDan2()),
+            'zakl_dan3' => Format::price($receipt->getZaklDan3()),
+            'dan3' => Format::price($receipt->getDan3()),
+            'cest_sluz' => Format::price($receipt->getCestSluz()),
+            'pouzit_zboz1' => Format::price($receipt->getPouzitZboz1()),
+            'pouzit_zboz2' => Format::price($receipt->getPouzitZboz2()),
+            'pouzit_zboz3' => Format::price($receipt->getPouzitZboz3()),
+            'urceno_cerp_zuct' => Format::price($receipt->getUrcenoCerpZuct()),
+            'cerp_zuct' => Format::price($receipt->getCerpZuct()),
+	        'rezim' => $message->getRezim(),
         ];
 
         return [
             'Hlavicka' => $head,
             'Data' => $body,
-            'KontrolniKody' => $this->getCheckCodes($receipt)
+            'KontrolniKody' => $this->getCheckCodes($message)
         ];
     }
 
-    /**
-     *
-     * @param Receipt $receipt
-     * @param boolean $check
-     * @return object
-     */
-    private function processData(Receipt $receipt, $check = FALSE) {
-        $data = $this->prepareData($receipt, $check);
+    private function processData(IMessage $message) : \stdClass
+    {
+        $data = $this->prepareData($message);
 
         return $this->getSoapClient()->OdeslaniTrzby($data);
     }
