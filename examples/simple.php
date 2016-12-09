@@ -41,10 +41,9 @@ $message->setReceipt($receipt);
 echo '<h2>---REQUEST---</h2>';
 echo "<pre>";
 try {
-    $fik = $dispatcher->send($message);
-    echo sprintf('<b>Returned FIK code: %s</b><br />', $fik);
-} catch (\FilipSedivy\EET\Exceptions\ServerException $e) {
-    var_dump($e); // See exception
+    $response = $dispatcher->send($message);
+    echo sprintf('<b>Returned FIK code: %s</b><br />', (string) $response);
+	var_dump($response);
 } catch (\Exception $e) {
     var_dump($e); // Fatal error
 }

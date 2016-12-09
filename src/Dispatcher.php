@@ -4,7 +4,6 @@ namespace FilipSedivy\EET;
 
 use FilipSedivy\EET\Exceptions\ClientException;
 use FilipSedivy\EET\Exceptions\RequirementsException;
-use FilipSedivy\EET\Exceptions\ServerException;
 use FilipSedivy\EET\SoapClient;
 use FilipSedivy\EET\Utils\Format;
 use RobRichards\XMLSecLibs\XMLSecurityKey;
@@ -39,11 +38,7 @@ class Dispatcher {
 
     public function check(IMessage $message) : bool
     {
-        try {
-            return (bool) $this->send($message->getOvereni() ? $message : (clone $message));
-        } catch (ServerException $e) {
-            return FALSE;
-        }
+		return (bool) $this->send($message->getOvereni() ? $message : (clone $message));
     }
 
     /**
@@ -126,15 +121,13 @@ class Dispatcher {
     }
 
 
-    public function send(IMessage $message) : string
+    public function send(IMessage $message) : Response
     {
         $this->initSoapClient();
 
-        $response = $this->processData($message);
+        $rawData = $this->processData($message);
 
-        isset($response->Chyba) && $this->processError($response->Chyba);
-
-        return $message->getOvereni() ? '1' : $response->Potvrzeni->fik;
+	    return (new Response($rawData, $message));
     }
 
     /**
@@ -219,25 +212,5 @@ class Dispatcher {
         return $this->getSoapClient()->OdeslaniTrzby($data);
     }
 
-    /**
-     * @param $error
-     * @throws ServerException
-     */
-    private function processError($error) {
-        if ($error->kod) {
-            $msgs = [
-                -1 => 'Docasna technicka chyba zpracovani – odeslete prosim datovou zpravu pozdeji',
-                2 => 'Kodovani XML neni platne',
-                3 => 'XML zprava nevyhovela kontrole XML schematu',
-                4 => 'Neplatny podpis SOAP zpravy',
-                5 => 'Neplatny kontrolni bezpecnostni kod poplatnika (BKP)',
-                6 => 'DIC poplatnika ma chybnou strukturu',
-                7 => 'Datova zprava je prilis velka',
-                8 => 'Datova zprava nebyla zpracovana kvuli technicke chybe nebo chybe dat',
-            ];
-            $msg = isset($msgs[$error->kod]) ? $msgs[$error->kod] : '';
-            throw new ServerException($msg, $error->kod);
-        }
-    }
 
 }
